@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KIET Mess - Student Portal</title>
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <style>
+    * { box-sizing: border-box; font-family: 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; }
+    body { background-color: #f8f9fa; color: #333; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 15px; }
+    
+    .header { width: 100%; max-width: 450px; background: #d32f2f; color: white; padding: 15px 20px; border-radius: 12px; text-align: center; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    .header h1 { font-size: 1.3rem; }
+    
+    .container { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); width: 100%; max-width: 450px; position: relative; overflow: hidden; }
+    
+    /* View Navigation Pages with Slide Animations */
+    .page-view { display: none; width: 100%; }
+    .page-view.active { display: block; animation: fadeIn 0.3s ease-in-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .back-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
+    .back-btn { background: #eee; border: none; padding: 6px 12px; border-radius: 20px; font-weight: bold; cursor: pointer; color: #555; }
+    
+    /* Inputs & Form */
+    .input-group { margin-bottom: 15px; text-align: left; }
+    label { display: block; font-size: 0.85rem; font-weight: 700; margin-bottom: 6px; color: #444; }
+    input { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 0.95rem; outline: none; }
+    input:focus { border-color: #d32f2f; }
+    .error-msg { color: #d32f2f; font-size: 0.75rem; margin-top: 4px; display: none; }
+
+    .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 1rem; font-weight: bold; background: #d32f2f; color: white; cursor: pointer; transition: 0.2s; }
+    .btn:hover { background: #b71c1c; }
+    .btn:disabled { background: #cccccc; cursor: not-allowed; }
+
+    /* Dashboard Widgets */
+    .user-info { background: #ffebee; color: #c62828; padding: 10px 15px; border-radius: 8px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 0.85rem; }
+    .logout-btn { background: transparent; border: none; color: #c62828; font-weight: bold; cursor: pointer; text-decoration: underline; }
+
+    .nav-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+    .nav-card-btn { background: #fdfbfb; border: 2px solid #eee; padding: 12px; border-radius: 10px; font-weight: bold; cursor: pointer; color: #333; text-align: center; }
+    .nav-card-btn.active { border-color: #d32f2f; background: #fff5f5; color: #d32f2f; }
+
+    .counter-box { background: #1565c0; color: white; border-radius: 12px; padding: 15px; text-align: center; margin-bottom: 15px; }
+    .counter-box h3 { font-size: 0.8rem; text-transform: uppercase; opacity: 0.9; }
+    .counter-box .token-num { font-size: 2.2rem; font-weight: 800; margin: 4px 0; }
+
+    .meal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+    .meal-card { border: 2px solid #e0e0e0; border-radius: 10px; padding: 10px; text-align: center; cursor: pointer; transition: 0.2s; }
+    .meal-card.active { border-color: #d32f2f; background: #fff5f5; }
+    .meal-card.disabled { opacity: 0.5; cursor: not-allowed; border-color: #ddd; background: #eee; }
+
+    .my-token { border: 2px dashed #4caf50; background: #f1f8e9; border-radius: 12px; padding: 12px; text-align: center; margin-top: 15px; display: none; }
+    .my-token h4 { color: #2e7d32; font-size: 0.85rem; }
+    .my-token .num { font-size: 1.8rem; font-weight: 800; color: #1b5e20; }
+
+    /* Days Menu Navigation */
+    .day-selector { display: flex; overflow-x: auto; gap: 8px; padding-bottom: 10px; margin-bottom: 15px; }
+    .day-chip { background: #eee; border: none; padding: 8px 14px; border-radius: 20px; font-weight: 600; font-size: 0.8rem; cursor: pointer; white-space: nowrap; }
+    .day-chip.active { background: #d32f2f; color: white; }
+
+    .menu-list-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>KIET Student Portal</h1>
+  </div>
+
+  <div class="container">
+    
+    <!-- PAGE 1: LOGIN -->
+    <div id="loginPage" class="page-view active">
+      <form id="loginForm">
+        <div class="input-group">
+          <label for="studentName">Full Name</label>
+          <input type="text" id="studentName" placeholder="Enter full name" required>
+        </div>
+        <div class="input-group">
+          <label for="rollNo">Roll Number (Exact 10 Characters)</label>
+          <input type="text" id="rollNo" maxlength="10" placeholder="e.g. 216W1A0501" required>
+          <div class="error-msg" id="rollError">Roll number must be exactly 10 characters long.</div>
+        </div>
+        <button type="submit" class="btn">Enter Portal</button>
+      </form>
+    </div>
+
+    <!-- PAGE 2: DASHBOARD MAIN -->
+    <div id="dashboardPage" class="page-view">
+      <div class="user-info">
+        <span id="displayUser">Student</span>
+        <button class="logout-btn" onclick="logout()">Logout</button>
+      </div>
+
+      <div class="nav-actions">
+        <div class="nav-card-btn active" onclick="switchMainTab('tokenView')">🎟️ Book Token</div>
+        <div class="nav-card-btn" onclick="switchMainTab('menuView')">📅 Mess Menu</div>
+      </div>
+
+      <!-- TAB 1: TOKEN BOOKING -->
+      <div id="tokenView">
+        <div class="counter-box">
+          <h3>Now Serving</h3>
+          <div class="token-num" id="nowServingNum">#0</div>
+          <span style="font-size: 0.75rem;">Est. Wait Time: 5 mins</span>
+        </div>
+
+        <div style="font-size: 0.9rem; font-weight: bold; margin-bottom: 8px;">Select Meal Category</div>
+        <div class="meal-grid">
+          <div class="meal-card active" id="cardBreakfast" onclick="selectMeal(this, 'Breakfast')">
+            <h4>Breakfast</h4>
+            <span style="font-size:0.7rem; color:#666;">7:30 - 9:00 AM</span>
+          </div>
+          <div class="meal-card" id="cardLunch" onclick="selectMeal(this, 'Lunch')">
+            <h4>Lunch</h4>
+            <span style="font-size:0.7rem; color:#666;">12:30 - 2:00 PM</span>
+          </div>
+          <div class="meal-card" id="cardSnacks" onclick="selectMeal(this, 'Snacks')">
+            <h4>Snacks</h4>
+            <span style="font-size:0.7rem; color:#666;">4:30 - 5:30 PM</span>
+          </div>
+          <div class="meal-card" id="cardDinner" onclick="selectMeal(this, 'Dinner')">
+            <h4>Dinner</h4>
+            <span style="font-size:0.7rem; color:#666;">7:30 - 9:00 PM</span>
+          </div>
+        </div>
+
+        <button class="btn" id="bookBtn" onclick="bookToken()">Book 1-Click Token</button>
+        <div id="bookingStatus" style="text-align: center; margin-top: 8px; font-weight: bold; font-size: 0.8rem;"></div>
+
+        <div class="my-token" id="myTokenBox">
+          <h4>Your Active Token</h4>
+          <div class="num" id="myTokenNum">#0</div>
+          <p id="myTokenMeal" style="font-size:0.8rem; color:#555;">Breakfast</p>
+        </div>
+      </div>
+
+      <!-- TAB 2: MENU -->
+      <div id="menuView" style="display: none;">
+        <div style="font-size:0.8rem; font-weight:bold; color:#d32f2f; margin-bottom:8px;" id="menuModeIndicator">Weekly Menu Mode</div>
+        
+        <!-- Day Buttons (Monday - Sunday) -->
+        <div class="day-selector" id="daySelectorBar">
+          <button class="day-chip active" onclick="loadDayMenu('Monday', this)">Mon</button>
+          <button class="day-chip" onclick="loadDayMenu('Tuesday', this)">Tue</button>
+          <button class="day-chip" onclick="loadDayMenu('Wednesday', this)">Wed</button>
+          <button class="day-chip" onclick="loadDayMenu('Thursday', this)">Thu</button>
+          <button class="day-chip" onclick="loadDayMenu('Friday', this)">Fri</button>
+          <button class="day-chip" onclick="loadDayMenu('Saturday', this)">Sat</button>
+          <button class="day-chip" onclick="loadDayMenu('Sunday', this)">Sun</button>
+        </div>
+
+        <div id="menuContent">
+          <div class="menu-list-item"><strong>Breakfast:</strong> <span id="mValBreakfast">Loading...</span></div>
+          <div class="menu-list-item"><strong>Lunch:</strong> <span id="mValLunch">Loading...</span></div>
+          <div class="menu-list-item"><strong>Snacks:</strong> <span id="mValSnacks">Loading...</span></div>
+          <div class="menu-list-item"><strong>Dinner:</strong> <span id="mValDinner">Loading...</span></div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyA72_Sg_ubr6xH92o_kKNcIlBa_8scWy0A",
+      authDomain: "smqe-o2.firebaseapp.com",
+      projectId: "smqe-o2",
+      storageBucket: "smqe-o2.firebasestorage.app",
+      messagingSenderId: "686444359238",
+      appId: "1:686444359238:web:9b4dec8e9b1d8d22d46447"
+    };
+
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    let currentUser = null;
+    let selectedMealType = 'Breakfast';
+    let isBookingAllowed = false;
+    let hasActiveToken = false;
+    let activeMealStates = { Breakfast: true, Lunch: true, Snacks: true, Dinner: true };
+    let menuMode = 'weekly';
+    let selectedDay = 'Monday';
+
+    // Form Validation (Exact 10 Characters)
+    document.getElementById('loginForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const name = document.getElementById('studentName').value.trim();
+      const rollNo = document.getElementById('rollNo').value.trim();
+      const rollError = document.getElementById('rollError');
+
+      if (rollNo.length !== 10) {
+        rollError.style.display = 'block';
+        return;
+      }
+      rollError.style.display = 'none';
+
+      currentUser = { name, rollNo };
+      document.getElementById('displayUser').innerText = `${name} (${rollNo})`;
+      document.getElementById('loginPage').classList.remove('active');
+      document.getElementById('dashboardPage').classList.add('active');
+
+      listenToLiveSystemState();
+      checkExistingToken();
+    });
+
+    function logout() {
+      currentUser = null;
+      document.getElementById('loginPage').classList.add('active');
+      document.getElementById('dashboardPage').classList.remove('active');
+    }
+
+    function switchMainTab(tab) {
+      const btns = document.querySelectorAll('.nav-card-btn');
+      btns.forEach(b => b.classList.remove('active'));
+
+      if (tab === 'tokenView') {
+        btns[0].classList.add('active');
+        document.getElementById('tokenView').style.display = 'block';
+        document.getElementById('menuView').style.display = 'none';
+      } else {
+        btns[1].classList.add('active');
+        document.getElementById('tokenView').style.display = 'none';
+        document.getElementById('menuView').style.display = 'block';
+        fetchMenuData();
+      }
+    }
+
+    function selectMeal(element, meal) {
+      if (activeMealStates[meal] === false) return;
+      document.querySelectorAll('.meal-card').forEach(card => card.classList.remove('active'));
+      element.classList.add('active');
+      selectedMealType = meal;
+    }
+
+    function listenToLiveSystemState() {
+      db.collection('systemState').doc('liveCounter')
+        .onSnapshot((doc) => {
+          if (doc.exists) {
+            const data = doc.data();
+            document.getElementById('nowServingNum').innerText = `#${data.nowServing || 0}`;
+            isBookingAllowed = data.allowBookings === true;
+            if (data.activeMeals) activeMealStates = data.activeMeals;
+            if (data.menuMode) menuMode = data.menuMode;
+
+            updateMealCardUI();
+            updateBookingButtonState();
+          }
+        });
+    }
+
+    function updateMealCardUI() {
+      ['Breakfast', 'Lunch', 'Snacks', 'Dinner'].forEach(m => {
+        const card = document.getElementById('card' + m);
+        if (activeMealStates[m] === false) card.classList.add('disabled');
+        else card.classList.remove('disabled');
+      });
+    }
+
+    function checkExistingToken() {
+      db.collection('tokens')
+        .where('rollNo', '==', currentUser.rollNo)
+        .where('status', '==', 'active')
+        .onSnapshot((snapshot) => {
+          if (!snapshot.empty) {
+            hasActiveToken = true;
+            const token = snapshot.docs[0].data();
+            document.getElementById('myTokenNum').innerText = `#${token.tokenNumber}`;
+            document.getElementById('myTokenMeal').innerText = `${token.mealType}`;
+            document.getElementById('myTokenBox').style.display = 'block';
+          } else {
+            hasActiveToken = false;
+            document.getElementById('myTokenBox').style.display = 'none';
+          }
+          updateBookingButtonState();
+        });
+    }
+
+    function updateBookingButtonState() {
+      const bookBtn = document.getElementById('bookBtn');
+
+      if (hasActiveToken) {
+        bookBtn.disabled = true;
+        bookBtn.innerText = 'Token Already Booked';
+      } else if (!isBookingAllowed || activeMealStates[selectedMealType] === false) {
+        bookBtn.disabled = true;
+        bookBtn.innerText = 'Bookings Disabled';
+      } else {
+        bookBtn.disabled = false;
+        bookBtn.innerText = 'Book 1-Click Token';
+      }
+    }
+
+    function bookToken() {
+      if (!isBookingAllowed || hasActiveToken || activeMealStates[selectedMealType] === false) return;
+
+      const statusDiv = document.getElementById('bookingStatus');
+      statusDiv.style.color = '#555';
+      statusDiv.innerText = 'Generating Token...';
+
+      db.collection('tokens').get().then((snapshot) => {
+        const nextTokenNum = snapshot.size + 1;
+
+        db.collection('tokens').add({
+          studentName: currentUser.name,
+          rollNo: currentUser.rollNo,
+          mealType: selectedMealType,
+          tokenNumber: nextTokenNum,
+          status: 'active',
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        })
+        .then(() => {
+          statusDiv.style.color = 'green';
+          statusDiv.innerText = 'Token Booked Successfully!';
+        })
+        .catch((err) => {
+          statusDiv.style.color = 'red';
+          statusDiv.innerText = 'Failed to book token.';
+        });
+      });
+    }
+
+    // Menu Logic
+    function loadDayMenu(day, el) {
+      if (el) {
+        document.querySelectorAll('.day-chip').forEach(c => c.classList.remove('active'));
+        el.classList.add('active');
+      }
+      selectedDay = day;
+      fetchMenuData();
+    }
+
+    function fetchMenuData() {
+      const indicator = document.getElementById('menuModeIndicator');
+      const dayBar = document.getElementById('daySelectorBar');
+
+      if (menuMode === 'today') {
+        indicator.innerText = "Showing Today's Special Menu";
+        dayBar.style.display = 'none';
+        db.collection('systemState').doc('todayMenu').get().then((doc) => {
+          updateMenuDisplay(doc.exists ? doc.data() : {});
+        });
+      } else {
+        indicator.innerText = `Weekly Menu - ${selectedDay}`;
+        dayBar.style.display = 'flex';
+        db.collection('weeklyMenus').doc(selectedDay).get().then((doc) => {
+          updateMenuDisplay(doc.exists ? doc.data() : {});
+        });
+      }
+    }
+
+    function updateMenuDisplay(data) {
+      document.getElementById('mValBreakfast').innerText = data.Breakfast || 'Not updated';
+      document.getElementById('mValLunch').innerText = data.Lunch || 'Not updated';
+      document.getElementById('mValSnacks').innerText = data.Snacks || 'Not updated';
+      document.getElementById('mValDinner').innerText = data.Dinner || 'Not updated';
+    }
+  </script>
+</body>
+</html>

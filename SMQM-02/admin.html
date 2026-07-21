@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KIET Mess - Admin Portal</title>
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <style>
+    * { box-sizing: border-box; font-family: 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; }
+    body { background-color: #f4f6f9; color: #333; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 15px; }
+    
+    .header { width: 100%; max-width: 600px; background: #333; color: white; padding: 15px 20px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+    .header h1 { font-size: 1.2rem; }
+    .logout-btn { background: #d32f2f; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+    
+    .card { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); width: 100%; max-width: 600px; margin-bottom: 15px; }
+    h2 { color: #d32f2f; margin-bottom: 12px; font-size: 1.1rem; border-bottom: 2px solid #eee; padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+    
+    .input-group { margin-bottom: 12px; text-align: left; }
+    label { display: block; font-size: 0.85rem; font-weight: 700; margin-bottom: 5px; color: #444; }
+    input, select { width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 0.9rem; outline: none; }
+    
+    .btn { padding: 10px 15px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 0.9rem; width: 100%; }
+    .btn-red { background: #d32f2f; color: white; }
+    .btn-green { background: #2e7d32; color: white; }
+    .btn-reset { background: #c62828; color: white; font-size: 0.8rem; padding: 6px 12px; border-radius: 6px; }
+
+    /* Toggle Switch */
+    .toggle-row { display: flex; justify-content: space-between; align-items: center; background: #fdfbfb; padding: 10px 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #eee; }
+    .switch { position: relative; display: inline-block; width: 44px; height: 22px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+    .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+    input:checked + .slider { background-color: #2e7d32; }
+    input:checked + .slider:before { transform: translateX(22px); }
+
+    .counter-control { text-align: center; background: #e3f2fd; border-radius: 12px; padding: 15px; margin-bottom: 15px; }
+    .counter-control .serving-num { font-size: 2.8rem; font-weight: 800; color: #0d47a1; margin: 5px 0; }
+    
+    .meal-controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .token-list { max-height: 200px; overflow-y: auto; margin-top: 10px; }
+    .token-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #eee; font-size: 0.85rem; }
+    
+    #adminDashboard { display: none; width: 100%; max-width: 600px; }
+    .msg-notice { font-size: 0.8rem; text-align: center; margin-top: 5px; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>KIET Mess Admin Portal</h1>
+    <button class="logout-btn" id="logoutBtn" style="display: none;" onclick="adminLogout()">Logout</button>
+  </div>
+
+  <!-- ADMIN LOGIN SCREEN -->
+  <div class="card" id="adminLoginScreen">
+    <h2>Admin Login</h2>
+    <form id="adminLoginForm">
+      <div class="input-group">
+        <label for="adminUser">Username</label>
+        <input type="text" id="adminUser" placeholder="Enter Username" required>
+      </div>
+      <div class="input-group">
+        <label for="adminPass">Password</label>
+        <input type="password" id="adminPass" placeholder="Enter Password" required>
+      </div>
+      <button type="submit" class="btn btn-red">Login</button>
+    </form>
+    <div id="loginError" style="color: red; margin-top: 8px; font-size: 0.85rem; text-align: center;"></div>
+  </div>
+
+  <!-- MAIN ADMIN DASHBOARD -->
+  <div id="adminDashboard">
+    
+    <!-- MASTER CONTROLS & HARD RESET -->
+    <div class="card">
+      <h2>
+        <span>System Controls</span>
+        <button class="btn btn-reset" onclick="confirmHardReset()">⚠️ Hard Reset Data</button>
+      </h2>
+      
+      <div class="toggle-row" style="background: #fff3e0; border-color: #ffe0b2;">
+        <span style="color: #e65100; font-weight: bold;">Allow All Student Bookings</span>
+        <label class="switch">
+          <input type="checkbox" id="bookingToggle" onchange="toggleMasterBooking(this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="meal-controls-grid">
+        <div class="toggle-row"><span>Breakfast</span><label class="switch"><input type="checkbox" id="mealBreakfast" onchange="toggleMeal('Breakfast', this.checked)"><span class="slider"></span></label></div>
+        <div class="toggle-row"><span>Lunch</span><label class="switch"><input type="checkbox" id="mealLunch" onchange="toggleMeal('Lunch', this.checked)"><span class="slider"></span></label></div>
+        <div class="toggle-row"><span>Snacks</span><label class="switch"><input type="checkbox" id="mealSnacks" onchange="toggleMeal('Snacks', this.checked)"><span class="slider"></span></label></div>
+        <div class="toggle-row"><span>Dinner</span><label class="switch"><input type="checkbox" id="mealDinner" onchange="toggleMeal('Dinner', this.checked)"><span class="slider"></span></label></div>
+      </div>
+    </div>
+
+    <!-- QUEUE CONTROLLER -->
+    <div class="card">
+      <h2>Queue Controller</h2>
+      <div class="counter-control">
+        <span style="font-size:0.8rem; color:#1565c0; font-weight:bold;">CURRENTLY SERVING TOKEN</span>
+        <div class="serving-num" id="currentServingVal">#0</div>
+        <button class="btn btn-green" onclick="nextStudent()">Call Next Active Token &rarr;</button>
+        <div class="msg-notice" id="queueNotice"></div>
+      </div>
+
+      <div style="font-size: 0.9rem; font-weight: bold;">Active Queue Tokens</div>
+      <div class="token-list" id="queueList">
+        <p style="text-align: center; color: #777;">Loading queue...</p>
+      </div>
+    </div>
+
+    <!-- MENU MANAGEMENT WITH TOGGLE MODE -->
+    <div class="card">
+      <h2>Menu Management</h2>
+      
+      <div class="toggle-row" style="background: #e8f5e9; border-color: #c8e6c9;">
+        <span style="color: #2e7d32; font-weight: bold;">Menu Display Mode</span>
+        <select id="menuModeSelect" style="width: auto; padding: 4px;" onchange="changeMenuMode(this.value)">
+          <option value="weekly">Weekly Mode</option>
+          <option value="today">Today Mode</option>
+        </select>
+      </div>
+
+      <form id="menuForm">
+        <div class="input-group" id="daySelectGroup">
+          <label>Target Day (Weekly Mode)</label>
+          <select id="targetDaySelect">
+            <option value="Monday">Monday</option>
+            <option value="Tuesday">Tuesday</option>
+            <option value="Wednesday">Wednesday</option>
+            <option value="Thursday">Thursday</option>
+            <option value="Friday">Friday</option>
+            <option value="Saturday">Saturday</option>
+            <option value="Sunday">Sunday</option>
+          </select>
+        </div>
+
+        <div class="input-group"><label>Breakfast</label><input type="text" id="mBreakfast" required></div>
+        <div class="input-group"><label>Lunch</label><input type="text" id="mLunch" required></div>
+        <div class="input-group"><label>Snacks</label><input type="text" id="mSnacks" required></div>
+        <div class="input-group"><label>Dinner</label><input type="text" id="mDinner" required></div>
+        
+        <button type="submit" class="btn btn-red">Save & Publish Menu</button>
+      </form>
+      <div id="menuStatus" class="msg-notice" style="color: green;"></div>
+    </div>
+
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyA72_Sg_ubr6xH92o_kKNcIlBa_8scWy0A",
+      authDomain: "smqe-o2.firebaseapp.com",
+      projectId: "smqe-o2",
+      storageBucket: "smqe-o2.firebasestorage.app",
+      messagingSenderId: "686444359238",
+      appId: "1:686444359238:web:9b4dec8e9b1d8d22d46447"
+    };
+
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    let activeTokensQueue = [];
+
+    document.getElementById('adminLoginForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const u = document.getElementById('adminUser').value;
+      const p = document.getElementById('adminPass').value;
+
+      if (u === 'admin' && p === 'kiet123') {
+        document.getElementById('adminLoginScreen').style.display = 'none';
+        document.getElementById('adminDashboard').style.display = 'block';
+        document.getElementById('logoutBtn').style.display = 'inline-block';
+        initAdminDashboard();
+      } else {
+        document.getElementById('loginError').innerText = 'Invalid Admin Credentials!';
+      }
+    });
+
+    function adminLogout() {
+      document.getElementById('adminLoginScreen').style.display = 'block';
+      document.getElementById('adminDashboard').style.display = 'none';
+      document.getElementById('logoutBtn').style.display = 'none';
+      document.getElementById('adminLoginForm').reset();
+    }
+
+    function initAdminDashboard() {
+      db.collection('systemState').doc('liveCounter')
+        .onSnapshot((doc) => {
+          if (doc.exists) {
+            const data = doc.data();
+            document.getElementById('currentServingVal').innerText = `#${data.nowServing || 0}`;
+            document.getElementById('bookingToggle').checked = data.allowBookings === true;
+            document.getElementById('menuModeSelect').value = data.menuMode || 'weekly';
+            toggleDaySelectVisibility(data.menuMode || 'weekly');
+
+            const meals = data.activeMeals || {};
+            document.getElementById('mealBreakfast').checked = meals.Breakfast !== false;
+            document.getElementById('mealLunch').checked = meals.Lunch !== false;
+            document.getElementById('mealSnacks').checked = meals.Snacks !== false;
+            document.getElementById('mealDinner').checked = meals.Dinner !== false;
+          }
+        });
+
+      db.collection('tokens').where('status', '==', 'active')
+        .onSnapshot((snapshot) => {
+          const queueList = document.getElementById('queueList');
+          queueList.innerHTML = '';
+          activeTokensQueue = [];
+
+          if (snapshot.empty) {
+            queueList.innerHTML = '<p style="text-align: center; color: #777;">No active tokens in queue.</p>';
+            return;
+          }
+
+          snapshot.forEach(doc => activeTokensQueue.push({ id: doc.id, ...doc.data() }));
+          activeTokensQueue.sort((a, b) => a.tokenNumber - b.tokenNumber);
+
+          activeTokensQueue.forEach((data) => {
+            const item = document.createElement('div');
+            item.className = 'token-item';
+            item.innerHTML = `
+              <div><strong>#${data.tokenNumber}</strong> - ${data.studentName} (${data.rollNo})</div>
+              <button class="btn btn-red" style="padding: 4px 8px; font-size: 0.75rem; width: auto;" onclick="serveToken('${data.id}', ${data.tokenNumber})">Mark Served</button>
+            `;
+            queueList.appendChild(item);
+          });
+        });
+    }
+
+    function toggleMasterBooking(status) {
+      db.collection('systemState').doc('liveCounter').set({ allowBookings: status }, { merge: true });
+    }
+
+    function toggleMeal(mealName, status) {
+      db.collection('systemState').doc('liveCounter').set({ activeMeals: { [mealName]: status } }, { merge: true });
+    }
+
+    function changeMenuMode(mode) {
+      db.collection('systemState').doc('liveCounter').set({ menuMode: mode }, { merge: true });
+      toggleDaySelectVisibility(mode);
+    }
+
+    function toggleDaySelectVisibility(mode) {
+      document.getElementById('daySelectGroup').style.display = (mode === 'weekly') ? 'block' : 'none';
+    }
+
+    function nextStudent() {
+      const notice = document.getElementById('queueNotice');
+      if (activeTokensQueue.length === 0) {
+        notice.style.color = 'red';
+        notice.innerText = 'Cannot call: Queue is empty!';
+        setTimeout(() => notice.innerText = '', 3000);
+        return;
+      }
+      const nextToken = activeTokensQueue[0];
+      serveToken(nextToken.id, nextToken.tokenNumber);
+    }
+
+    function serveToken(docId, tokenNum) {
+      db.collection('tokens').doc(docId).update({ status: 'served' }).then(() => {
+        db.collection('systemState').doc('liveCounter').set({ nowServing: tokenNum }, { merge: true });
+      });
+    }
+
+    // Hard Reset Function
+    function confirmHardReset() {
+      if (confirm("Are you sure you want to clear ALL active tokens and reset the serving counter back to #0?")) {
+        db.collection('tokens').get().then(snapshot => {
+          snapshot.forEach(doc => doc.ref.delete());
+        });
+        db.collection('systemState').doc('liveCounter').set({
+          nowServing: 0,
+          allowBookings: false
+        }, { merge: true });
+        alert("System data successfully reset!");
+      }
+    }
+
+    // Save Menu
+    document.getElementById('menuForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const mode = document.getElementById('menuModeSelect').value;
+      const data = {
+        Breakfast: document.getElementById('mBreakfast').value,
+        Lunch: document.getElementById('mLunch').value,
+        Snacks: document.getElementById('mSnacks').value,
+        Dinner: document.getElementById('mDinner').value
+      };
+
+      if (mode === 'today') {
+        db.collection('systemState').doc('todayMenu').set(data);
+      } else {
+        const day = document.getElementById('targetDaySelect').value;
+        db.collection('weeklyMenus').doc(day).set(data);
+      }
+
+      document.getElementById('menuStatus').innerText = 'Menu updated successfully!';
+      setTimeout(() => document.getElementById('menuStatus').innerText = '', 3000);
+    });
+  </script>
+</body>
+</html>
